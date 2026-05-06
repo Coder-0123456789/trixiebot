@@ -1,112 +1,2057 @@
-import difflib
-import json
 import os
 import random
 import threading
-from pathlib import Path
-import customtkinter as ctk
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from dotenv import load_dotenv
 import time
 
-MOODS_FILE = Path("moods.json")
+moods = {
+    "happy": {
+        "sounds": [
+            "meow",
+            "mrrp",
+            "mew"
+        ],
+        "punctuation": [
+            "!",
+            "!!",
+            "...",
+            "",
+            "————"
+        ],
+        "upper_chance_per_letter": 0.2,
+        "extend_range": [
+            2,
+            4
+        ],
+        "words_per_sentence_range": [
+            2,
+            5
+        ],
+        "extend_chance": 0.6,
+        "upper_chance_per_word": 0.2,
+        "stutter_chance": 0.1,
+        "chance_to_change_mood": 0.12,
+        "other_moods": {
+            "playful": 0.35,
+            "affectionate": 0.25,
+            "giggly": 0.2,
+            "hyper": 0.1,
+            "sleepy": 0.1
+        }
+    },
+    "sleepy": {
+        "sounds": [
+            "mew",
+            "prr",
+            "mm"
+        ],
+        "punctuation": [
+            "...",
+            "...",
+            "",
+            "."
+        ],
+        "upper_chance_per_letter": 0.05,
+        "extend_range": [
+            2,
+            6
+        ],
+        "words_per_sentence_range": [
+            1,
+            3
+        ],
+        "extend_chance": 0.7,
+        "upper_chance_per_word": 0.05,
+        "stutter_chance": 0.05,
+        "chance_to_change_mood": 0.18,
+        "other_moods": {
+            "loaf": 0.35,
+            "rainy_day": 0.2,
+            "spacey": 0.2,
+            "melancholy": 0.15,
+            "happy": 0.1
+        }
+    },
+    "angry": {
+        "sounds": [
+            "hiss",
+            "grr",
+            "mrrr"
+        ],
+        "punctuation": [
+            "!",
+            "!!",
+            "!!!",
+            "—",
+            "??"
+        ],
+        "upper_chance_per_letter": 0.5,
+        "extend_range": [
+            2,
+            6
+        ],
+        "words_per_sentence_range": [
+            1,
+            3
+        ],
+        "extend_chance": 0.8,
+        "upper_chance_per_word": 0.6,
+        "stutter_chance": 0.2,
+        "chance_to_change_mood": 0.22,
+        "other_moods": {
+            "grumpy": 0.3,
+            "feral": 0.25,
+            "overstimulated": 0.2,
+            "jealous": 0.15,
+            "sassy": 0.1
+        }
+    },
+    "hungry": {
+        "sounds": [
+            "meow",
+            "mrrp",
+            "nya"
+        ],
+        "punctuation": [
+            "??",
+            "???",
+            "!",
+            ""
+        ],
+        "upper_chance_per_letter": 0.3,
+        "extend_range": [
+            2,
+            5
+        ],
+        "words_per_sentence_range": [
+            2,
+            4
+        ],
+        "extend_chance": 0.7,
+        "upper_chance_per_word": 0.4,
+        "stutter_chance": 0.2,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+    "chaotic": {
+        "sounds": [
+            "meow",
+            "mrrp",
+            "hiss",
+            "nya",
+            "mew"
+        ],
+        "punctuation": [
+            "!!!",
+            "???",
+            "!?!?",
+            "————",
+            "..."
+        ],
+        "upper_chance_per_letter": 0.7,
+        "extend_range": [
+            2,
+            8
+        ],
+        "words_per_sentence_range": [
+            3,
+            7
+        ],
+        "extend_chance": 0.9,
+        "upper_chance_per_word": 0.7,
+        "stutter_chance": 0.3,
+        "chance_to_change_mood": 0.28,
+        "other_moods": {
+            "chaos_gremlin": 0.3,
+            "zoomies": 0.25,
+            "feral": 0.15,
+            "unhinged": 0.15,
+            "glitchy": 0.15
+        }
+    },
+    "playful": {
+        "sounds": [
+            "mrrp",
+            "nya",
+            "meow"
+        ],
+        "punctuation": [
+            "!",
+            "!!",
+            "~",
+            ""
+        ],
+        "upper_chance_per_letter": 0.25,
+        "extend_range": [
+            2,
+            5
+        ],
+        "words_per_sentence_range": [
+            2,
+            6
+        ],
+        "extend_chance": 0.6,
+        "upper_chance_per_word": 0.3,
+        "stutter_chance": 0.15,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.3,
+            "zoomies": 0.25,
+            "giggly": 0.2,
+            "affectionate": 0.15,
+            "chaotic": 0.1
+        }
+    },
+    "needy": {
+        "sounds": [
+            "meow",
+            "mew",
+            "nya"
+        ],
+        "punctuation": [
+            "...",
+            "??",
+            "???"
+        ],
+        "upper_chance_per_letter": 0.2,
+        "extend_range": [
+            2,
+            6
+        ],
+        "words_per_sentence_range": [
+            2,
+            4
+        ],
+        "extend_chance": 0.7,
+        "upper_chance_per_word": 0.2,
+        "stutter_chance": 0.4,
+        "chance_to_change_mood": 0.24,
+        "other_moods": {
+            "clingy": 0.3,
+            "lonely": 0.25,
+            "baby": 0.2,
+            "attention_seeking": 0.15,
+            "affectionate": 0.1
+        }
+    },
+    "grumpy": {
+        "sounds": [
+            "mrr",
+            "hmph",
+            "grr"
+        ],
+        "punctuation": [
+            ".",
+            "...",
+            "—"
+        ],
+        "upper_chance_per_letter": 0.3,
+        "extend_range": [
+            2,
+            4
+        ],
+        "words_per_sentence_range": [
+            1,
+            3
+        ],
+        "extend_chance": 0.5,
+        "upper_chance_per_word": 0.3,
+        "stutter_chance": 0.1,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+    "dramatic": {
+        "sounds": [
+            "meow",
+            "mrrr",
+            "nya",
+            "mew"
+        ],
+        "punctuation": [
+            "!!!",
+            "?!",
+            "...",
+            "—",
+            "????"
+        ],
+        "upper_chance_per_letter": 0.45,
+        "extend_range": [
+            3,
+            7
+        ],
+        "words_per_sentence_range": [
+            2,
+            6
+        ],
+        "extend_chance": 0.8,
+        "upper_chance_per_word": 0.5,
+        "stutter_chance": 0.25,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+    "feral": {
+        "sounds": [
+            "hiss",
+            "mrrr",
+            "grr",
+            "yowl",
+            "nya"
+        ],
+        "punctuation": [
+            "!!!",
+            "!!",
+            "!?!?",
+            "???"
+        ],
+        "upper_chance_per_letter": 0.75,
+        "extend_range": [
+            2,
+            8
+        ],
+        "words_per_sentence_range": [
+            3,
+            7
+        ],
+        "extend_chance": 0.9,
+        "upper_chance_per_word": 0.8,
+        "stutter_chance": 0.35,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+    "judgy": {
+        "sounds": [
+            "hmph",
+            "mrr",
+            "mew",
+            "hmm"
+        ],
+        "punctuation": [
+            ".",
+            "...",
+            "—",
+            ""
+        ],
+        "upper_chance_per_letter": 0.1,
+        "extend_range": [
+            2,
+            4
+        ],
+        "words_per_sentence_range": [
+            1,
+            3
+        ],
+        "extend_chance": 0.35,
+        "upper_chance_per_word": 0.1,
+        "stutter_chance": 0.05,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+    "clingy": {
+        "sounds": [
+            "meow",
+            "mew",
+            "nya",
+            "mrrp"
+        ],
+        "punctuation": [
+            "...",
+            "??",
+            "???",
+            "!"
+        ],
+        "upper_chance_per_letter": 0.25,
+        "extend_range": [
+            3,
+            7
+        ],
+        "words_per_sentence_range": [
+            3,
+            6
+        ],
+        "extend_chance": 0.85,
+        "upper_chance_per_word": 0.25,
+        "stutter_chance": 0.45,
+        "chance_to_change_mood": 0.26,
+        "other_moods": {
+            "clingy_3am": 0.25,
+            "needy": 0.25,
+            "overattached": 0.2,
+            "clingy_texting": 0.2,
+            "lonely": 0.1
+        }
+    },
+    "zoomies": {
+        "sounds": [
+            "mrrp",
+            "nya",
+            "meow",
+            "prrt",
+            "mew"
+        ],
+        "punctuation": [
+            "!!!",
+            "!?!?",
+            "??",
+            "————"
+        ],
+        "upper_chance_per_letter": 0.65,
+        "extend_range": [
+            2,
+            7
+        ],
+        "words_per_sentence_range": [
+            4,
+            8
+        ],
+        "extend_chance": 0.8,
+        "upper_chance_per_word": 0.75,
+        "stutter_chance": 0.3,
+        "chance_to_change_mood": 0.25,
+        "other_moods": {
+            "hyper": 0.3,
+            "chaotic": 0.25,
+            "playful": 0.2,
+            "overstimulated": 0.15,
+            "sleepy": 0.1
+        }
+    },
+    "confused": {
+        "sounds": [
+            "mew",
+            "mrp",
+            "huh",
+            "nya"
+        ],
+        "punctuation": [
+            "?",
+            "??",
+            "???",
+            "...?"
+        ],
+        "upper_chance_per_letter": 0.25,
+        "extend_range": [
+            2,
+            5
+        ],
+        "words_per_sentence_range": [
+            1,
+            4
+        ],
+        "extend_chance": 0.5,
+        "upper_chance_per_word": 0.25,
+        "stutter_chance": 0.25,
+        "chance_to_change_mood": 0.18,
+        "other_moods": {
+            "awkward": 0.3,
+            "overthinking": 0.25,
+            "paranoid": 0.15,
+            "spacey": 0.15,
+            "happy": 0.15
+        }
+    },
+    "fancy": {
+        "sounds": [
+            "mrrp",
+            "prr",
+            "meow",
+            "nya"
+        ],
+        "punctuation": [
+            "~",
+            ".",
+            "...",
+            "—"
+        ],
+        "upper_chance_per_letter": 0.08,
+        "extend_range": [
+            2,
+            4
+        ],
+        "words_per_sentence_range": [
+            2,
+            4
+        ],
+        "extend_chance": 0.45,
+        "upper_chance_per_word": 0.08,
+        "stutter_chance": 0.05,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+    "goblin": {
+        "sounds": [
+            "mrr",
+            "grr",
+            "nya",
+            "hiss",
+            "blep"
+        ],
+        "punctuation": [
+            "!!!",
+            "???",
+            "!?!?",
+            "—",
+            ""
+        ],
+        "upper_chance_per_letter": 0.55,
+        "extend_range": [
+            2,
+            8
+        ],
+        "words_per_sentence_range": [
+            3,
+            7
+        ],
+        "extend_chance": 0.85,
+        "upper_chance_per_word": 0.65,
+        "stutter_chance": 0.4,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+    "lonely": {
+        "sounds": [
+            "mew",
+            "meow",
+            "mm",
+            "nya"
+        ],
+        "punctuation": [
+            "...",
+            "...",
+            "?",
+            ""
+        ],
+        "upper_chance_per_letter": 0.08,
+        "extend_range": [
+            3,
+            7
+        ],
+        "words_per_sentence_range": [
+            1,
+            3
+        ],
+        "extend_chance": 0.8,
+        "upper_chance_per_word": 0.08,
+        "stutter_chance": 0.25,
+        "chance_to_change_mood": 0.24,
+        "other_moods": {
+            "needy": 0.25,
+            "melancholy": 0.25,
+            "clingy": 0.2,
+            "soft_crying": 0.15,
+            "sleepy": 0.15
+        }
+    },
+    "sassy": {
+        "sounds": [
+            "hmph",
+            "prr",
+            "mew"
+        ],
+        "punctuation": [
+            "!",
+            "?",
+            "."
+        ],
+        "upper_chance_per_letter": 0.3,
+        "extend_range": [
+            2,
+            4
+        ],
+        "words_per_sentence_range": [
+            1,
+            3
+        ],
+        "extend_chance": 0.4,
+        "upper_chance_per_word": 0.5,
+        "stutter_chance": 0.1,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+    "overstimulated": {
+        "sounds": [
+            "mrrp",
+            "meow",
+            "hiss",
+            "nya"
+        ],
+        "punctuation": [
+            "!!!",
+            "!?!?",
+            "??",
+            "..."
+        ],
+        "upper_chance_per_letter": 0.6,
+        "extend_range": [
+            2,
+            7
+        ],
+        "words_per_sentence_range": [
+            3,
+            7
+        ],
+        "extend_chance": 0.85,
+        "upper_chance_per_word": 0.6,
+        "stutter_chance": 0.3,
+        "chance_to_change_mood": 0.28,
+        "other_moods": {
+            "panicking": 0.25,
+            "chaotic": 0.25,
+            "angry": 0.2,
+            "zoom_out": 0.15,
+            "sleepy": 0.15
+        }
+    },
+    "suspicious": {
+        "sounds": [
+            "mrr",
+            "hmm",
+            "mew",
+            "hrm"
+        ],
+        "punctuation": [
+            "...",
+            "??",
+            ".",
+            ""
+        ],
+        "upper_chance_per_letter": 0.15,
+        "extend_range": [
+            2,
+            4
+        ],
+        "words_per_sentence_range": [
+            1,
+            3
+        ],
+        "extend_chance": 0.4,
+        "upper_chance_per_word": 0.2,
+        "stutter_chance": 0.1,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+    "baby": {
+        "sounds": [
+            "mew",
+            "miu",
+            "nyaa",
+            "meep"
+        ],
+        "punctuation": [
+            "...",
+            "!!",
+            "?",
+            ""
+        ],
+        "upper_chance_per_letter": 0.2,
+        "extend_range": [
+            3,
+            6
+        ],
+        "words_per_sentence_range": [
+            2,
+            5
+        ],
+        "extend_chance": 0.7,
+        "upper_chance_per_word": 0.2,
+        "stutter_chance": 0.4,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+    "possessed": {
+        "sounds": [
+            "mrr",
+            "hiss",
+            "grr",
+            "m̷e̷o̷w̷"
+        ],
+        "punctuation": [
+            "—",
+            "!!!",
+            "...",
+            "!?!?"
+        ],
+        "upper_chance_per_letter": 0.7,
+        "extend_range": [
+            2,
+            8
+        ],
+        "words_per_sentence_range": [
+            2,
+            6
+        ],
+        "extend_chance": 0.9,
+        "upper_chance_per_word": 0.8,
+        "stutter_chance": 0.2,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+    "npc": {
+        "sounds": [
+            "meow",
+            "meow",
+            "meow"
+        ],
+        "punctuation": [
+            ".",
+            ".",
+            "...",
+            ""
+        ],
+        "upper_chance_per_letter": 0.0,
+        "extend_range": [
+            2,
+            3
+        ],
+        "words_per_sentence_range": [
+            2,
+            4
+        ],
+        "extend_chance": 0.2,
+        "upper_chance_per_word": 0.0,
+        "stutter_chance": 0.0,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+    "academic": {
+        "sounds": [
+            "mrr",
+            "meow",
+            "hmm",
+            "mew"
+        ],
+        "punctuation": [
+            ".",
+            "...",
+            "—"
+        ],
+        "upper_chance_per_letter": 0.1,
+        "extend_range": [
+            2,
+            4
+        ],
+        "words_per_sentence_range": [
+            1,
+            3
+        ],
+        "extend_chance": 0.3,
+        "upper_chance_per_word": 0.1,
+        "stutter_chance": 0.05,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+    "gremlin": {
+        "sounds": [
+            "grr",
+            "mrrp",
+            "nya",
+            "blep"
+        ],
+        "punctuation": [
+            "!!!",
+            "???",
+            "!?!?",
+            ""
+        ],
+        "upper_chance_per_letter": 0.6,
+        "extend_range": [
+            2,
+            7
+        ],
+        "words_per_sentence_range": [
+            3,
+            7
+        ],
+        "extend_chance": 0.85,
+        "upper_chance_per_word": 0.65,
+        "stutter_chance": 0.35,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+    "affectionate": {
+        "sounds": [
+            "mrrp",
+            "purr",
+            "meow",
+            "mew"
+        ],
+        "punctuation": [
+            "...",
+            "!!",
+            "~",
+            ""
+        ],
+        "upper_chance_per_letter": 0.2,
+        "extend_range": [
+            3,
+            6
+        ],
+        "words_per_sentence_range": [
+            2,
+            5
+        ],
+        "extend_chance": 0.7,
+        "upper_chance_per_word": 0.25,
+        "stutter_chance": 0.2,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+    "jealous": {
+        "sounds": [
+            "hiss",
+            "mrr",
+            "grr",
+            "meow"
+        ],
+        "punctuation": [
+            "!!",
+            "!",
+            "...",
+            "??"
+        ],
+        "upper_chance_per_letter": 0.4,
+        "extend_range": [
+            2,
+            6
+        ],
+        "words_per_sentence_range": [
+            2,
+            5
+        ],
+        "extend_chance": 0.7,
+        "upper_chance_per_word": 0.4,
+        "stutter_chance": 0.25,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+    "rainy_day": {
+        "sounds": [
+            "mew",
+            "mm",
+            "prr",
+            "meow"
+        ],
+        "punctuation": [
+            "...",
+            ".",
+            "",
+            "..."
+        ],
+        "upper_chance_per_letter": 0.05,
+        "extend_range": [
+            3,
+            6
+        ],
+        "words_per_sentence_range": [
+            1,
+            3
+        ],
+        "extend_chance": 0.75,
+        "upper_chance_per_word": 0.05,
+        "stutter_chance": 0.1,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+    "glitchy": {
+        "sounds": [
+            "meow",
+            "m3ow",
+            "mrr5p",
+            "n8ya"
+        ],
+        "punctuation": [
+            "???",
+            "!!!",
+            "...",
+            "—"
+        ],
+        "upper_chance_per_letter": 0.7,
+        "extend_range": [
+            4,
+            9
+        ],
+        "words_per_sentence_range": [
+            3,
+            7
+        ],
+        "extend_chance": 0.9,
+        "upper_chance_per_word": 0.7,
+        "stutter_chance": 0.3,
+        "chance_to_change_mood": 0.26,
+        "other_moods": {
+            "broken": 0.25,
+            "echo": 0.25,
+            "possessed": 0.2,
+            "chaotic": 0.15,
+            "confused": 0.15
+        }
+    },
+    "shy": {
+        "sounds": [
+            "mew",
+            "mm",
+            "mrr"
+        ],
+        "punctuation": [
+            "...",
+            ".",
+            "",
+            "..."
+        ],
+        "upper_chance_per_letter": 0.05,
+        "extend_range": [
+            2,
+            4
+        ],
+        "words_per_sentence_range": [
+            1,
+            2
+        ],
+        "extend_chance": 0.5,
+        "upper_chance_per_word": 0.05,
+        "stutter_chance": 0.3,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+    "bossy": {
+        "sounds": [
+            "meow",
+            "mrr",
+            "hiss"
+        ],
+        "punctuation": [
+            "!",
+            "!!",
+            ".",
+            "—"
+        ],
+        "upper_chance_per_letter": 0.4,
+        "extend_range": [
+            2,
+            5
+        ],
+        "words_per_sentence_range": [
+            1,
+            4
+        ],
+        "extend_chance": 0.6,
+        "upper_chance_per_word": 0.5,
+        "stutter_chance": 0.15,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+    "derpy": {
+        "sounds": [
+            "mew",
+            "mep",
+            "blep",
+            "meow"
+        ],
+        "punctuation": [
+            "!!",
+            "???",
+            "",
+            "..."
+        ],
+        "upper_chance_per_letter": 0.3,
+        "extend_range": [
+            2,
+            6
+        ],
+        "words_per_sentence_range": [
+            2,
+            6
+        ],
+        "extend_chance": 0.7,
+        "upper_chance_per_word": 0.3,
+        "stutter_chance": 0.25,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+    "paranoid": {
+        "sounds": [
+            "mrr",
+            "hmm",
+            "huh",
+            "mew"
+        ],
+        "punctuation": [
+            "...",
+            "??",
+            "???",
+            ""
+        ],
+        "upper_chance_per_letter": 0.25,
+        "extend_range": [
+            2,
+            5
+        ],
+        "words_per_sentence_range": [
+            1,
+            4
+        ],
+        "extend_chance": 0.6,
+        "upper_chance_per_word": 0.3,
+        "stutter_chance": 0.3,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+    "melancholy": {
+        "sounds": [
+            "mew",
+            "mm",
+            "prr",
+            "meow"
+        ],
+        "punctuation": [
+            "...",
+            ".",
+            "...",
+            ""
+        ],
+        "upper_chance_per_letter": 0.05,
+        "extend_range": [
+            3,
+            7
+        ],
+        "words_per_sentence_range": [
+            1,
+            3
+        ],
+        "extend_chance": 0.8,
+        "upper_chance_per_word": 0.05,
+        "stutter_chance": 0.2,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+    "hyper": {
+        "sounds": [
+            "meow",
+            "mrrp",
+            "nya",
+            "mew"
+        ],
+        "punctuation": [
+            "!!!",
+            "!!",
+            "!?!?",
+            "????"
+        ],
+        "upper_chance_per_letter": 0.7,
+        "extend_range": [
+            2,
+            8
+        ],
+        "words_per_sentence_range": [
+            4,
+            9
+        ],
+        "extend_chance": 0.85,
+        "upper_chance_per_word": 0.75,
+        "stutter_chance": 0.25,
+        "chance_to_change_mood": 0.25,
+        "other_moods": {
+            "zoomies": 0.3,
+            "manic": 0.25,
+            "chaotic": 0.2,
+            "overstimulated": 0.15,
+            "sleepy": 0.1
+        }
+    },
+    "sarcastic": {
+        "sounds": [
+            "meow",
+            "hmph",
+            "mrr"
+        ],
+        "punctuation": [
+            ".",
+            "...",
+            "—",
+            ""
+        ],
+        "upper_chance_per_letter": 0.2,
+        "extend_range": [
+            2,
+            4
+        ],
+        "words_per_sentence_range": [
+            1,
+            3
+        ],
+        "extend_chance": 0.4,
+        "upper_chance_per_word": 0.2,
+        "stutter_chance": 0.1,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+    "clingy_3am": {
+        "sounds": [
+            "mew",
+            "meow",
+            "nya",
+            "mrrp"
+        ],
+        "punctuation": [
+            "...",
+            "???",
+            "??",
+            ""
+        ],
+        "upper_chance_per_letter": 0.2,
+        "extend_range": [
+            4,
+            8
+        ],
+        "words_per_sentence_range": [
+            3,
+            7
+        ],
+        "extend_chance": 0.9,
+        "upper_chance_per_word": 0.2,
+        "stutter_chance": 0.5,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+    "loaf": {
+        "sounds": [
+            "mm",
+            "mrr",
+            "prr"
+        ],
+        "punctuation": [
+            ".",
+            "...",
+            ""
+        ],
+        "upper_chance_per_letter": 0.02,
+        "extend_range": [
+            2,
+            3
+        ],
+        "words_per_sentence_range": [
+            1,
+            2
+        ],
+        "extend_chance": 0.3,
+        "upper_chance_per_word": 0.02,
+        "stutter_chance": 0.0,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+    "predator": {
+        "sounds": [
+            "mrr",
+            "grr",
+            "hiss",
+            "chkk"
+        ],
+        "punctuation": [
+            "...",
+            "!",
+            "!!",
+            ""
+        ],
+        "upper_chance_per_letter": 0.4,
+        "extend_range": [
+            2,
+            6
+        ],
+        "words_per_sentence_range": [
+            1,
+            3
+        ],
+        "extend_chance": 0.6,
+        "upper_chance_per_word": 0.4,
+        "stutter_chance": 0.1,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+    "zoom_out": {
+        "sounds": [
+            "meow",
+            "mew",
+            "mrrp"
+        ],
+        "punctuation": [
+            "...",
+            "—",
+            "",
+            "..."
+        ],
+        "upper_chance_per_letter": 0.1,
+        "extend_range": [
+            3,
+            6
+        ],
+        "words_per_sentence_range": [
+            1,
+            4
+        ],
+        "extend_chance": 0.6,
+        "upper_chance_per_word": 0.1,
+        "stutter_chance": 0.1,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+    "broken": {
+        "sounds": [
+            "me",
+            "mrr",
+            "ow",
+            "nya"
+        ],
+        "punctuation": [
+            "...",
+            "—",
+            "",
+            "..."
+        ],
+        "upper_chance_per_letter": 0.3,
+        "extend_range": [
+            2,
+            5
+        ],
+        "words_per_sentence_range": [
+            2,
+            6
+        ],
+        "extend_chance": 0.7,
+        "upper_chance_per_word": 0.4,
+        "stutter_chance": 0.4,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+    "echo": {
+        "sounds": [
+            "meow",
+            "mew",
+            "mrr"
+        ],
+        "punctuation": [
+            "...",
+            "...",
+            ""
+        ],
+        "upper_chance_per_letter": 0.2,
+        "extend_range": [
+            2,
+            5
+        ],
+        "words_per_sentence_range": [
+            2,
+            4
+        ],
+        "extend_chance": 0.7,
+        "upper_chance_per_word": 0.2,
+        "stutter_chance": 0.1,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+    "overconfident": {
+        "sounds": [
+            "meow",
+            "mrr",
+            "hmm"
+        ],
+        "punctuation": [
+            "!",
+            "!!",
+            ".",
+            "—"
+        ],
+        "upper_chance_per_letter": 0.4,
+        "extend_range": [
+            2,
+            5
+        ],
+        "words_per_sentence_range": [
+            2,
+            5
+        ],
+        "extend_chance": 0.6,
+        "upper_chance_per_word": 0.5,
+        "stutter_chance": 0.05,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+    "spacey": {
+        "sounds": [
+            "mew",
+            "mm",
+            "mrr"
+        ],
+        "punctuation": [
+            "...",
+            "...",
+            ".",
+            ""
+        ],
+        "upper_chance_per_letter": 0.05,
+        "extend_range": [
+            3,
+            7
+        ],
+        "words_per_sentence_range": [
+            1,
+            3
+        ],
+        "extend_chance": 0.8,
+        "upper_chance_per_word": 0.05,
+        "stutter_chance": 0.2,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+    "chaos_gremlin": {
+        "sounds": [
+            "grr",
+            "mrrp",
+            "blep",
+            "nya",
+            "hiss"
+        ],
+        "punctuation": [
+            "!!!",
+            "???",
+            "!?!?",
+            "????"
+        ],
+        "upper_chance_per_letter": 0.75,
+        "extend_range": [
+            2,
+            8
+        ],
+        "words_per_sentence_range": [
+            4,
+            9
+        ],
+        "extend_chance": 0.9,
+        "upper_chance_per_word": 0.75,
+        "stutter_chance": 0.4,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+    "royal": {
+        "sounds": [
+            "mrrp",
+            "prr",
+            "meow"
+        ],
+        "punctuation": [
+            ".",
+            "—",
+            "...",
+            ""
+        ],
+        "upper_chance_per_letter": 0.1,
+        "extend_range": [
+            2,
+            4
+        ],
+        "words_per_sentence_range": [
+            2,
+            4
+        ],
+        "extend_chance": 0.4,
+        "upper_chance_per_word": 0.1,
+        "stutter_chance": 0.05,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+      "whiny": {
+        "sounds": ["meow", "mew", "nyah", "mrrp"],
+        "punctuation": ["...", "??", "???", "!"],
+        "upper_chance_per_letter": 0.18,
+        "extend_range": [3, 7],
+        "words_per_sentence_range": [2, 5],
+        "extend_chance": 0.75,
+        "upper_chance_per_word": 0.2,
+        "stutter_chance": 0.35,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+      "dramatically_sad": {
+        "sounds": ["mew", "meow", "mrrr", "prr"],
+        "punctuation": ["...", "—", "?!", "!!"],
+        "upper_chance_per_letter": 0.25,
+        "extend_range": [4, 9],
+        "words_per_sentence_range": [2, 6],
+        "extend_chance": 0.85,
+        "upper_chance_per_word": 0.3,
+        "stutter_chance": 0.25,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+      "fake_happy": {
+        "sounds": ["meow", "mrrp", "nya", "mew"],
+        "punctuation": ["!", "!!", "...!", "~"],
+        "upper_chance_per_letter": 0.35,
+        "extend_range": [2, 5],
+        "words_per_sentence_range": [3, 6],
+        "extend_chance": 0.55,
+        "upper_chance_per_word": 0.45,
+        "stutter_chance": 0.12,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+      "clingy_baby": {
+        "sounds": ["mew", "meep", "nyaa", "mrrp"],
+        "punctuation": ["...", "??", "!!!", ""],
+        "upper_chance_per_letter": 0.22,
+        "extend_range": [4, 8],
+        "words_per_sentence_range": [3, 7],
+        "extend_chance": 0.9,
+        "upper_chance_per_word": 0.25,
+        "stutter_chance": 0.5,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+      "overattached": {
+        "sounds": ["meow", "mew", "mrrp", "purr"],
+        "punctuation": ["...", "???", "!!", ""],
+        "upper_chance_per_letter": 0.2,
+        "extend_range": [3, 8],
+        "words_per_sentence_range": [4, 8],
+        "extend_chance": 0.88,
+        "upper_chance_per_word": 0.22,
+        "stutter_chance": 0.42,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+      "passive_aggressive": {
+        "sounds": ["mrr", "hmph", "mew", "hmm"],
+        "punctuation": [".", "...", "—", "!!"],
+        "upper_chance_per_letter": 0.12,
+        "extend_range": [2, 4],
+        "words_per_sentence_range": [1, 4],
+        "extend_chance": 0.35,
+        "upper_chance_per_word": 0.18,
+        "stutter_chance": 0.05,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+      "delusional": {
+        "sounds": ["meow", "nya", "mrrp", "prrt"],
+        "punctuation": ["!!!", "???", "!?!?", "~"],
+        "upper_chance_per_letter": 0.55,
+        "extend_range": [2, 8],
+        "words_per_sentence_range": [4, 9],
+        "extend_chance": 0.8,
+        "upper_chance_per_word": 0.6,
+        "stutter_chance": 0.25,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+      "sleep_deprived": {
+        "sounds": ["mew", "mm", "prr", "mrr"],
+        "punctuation": ["...", ".", "...?", ""],
+        "upper_chance_per_letter": 0.08,
+        "extend_range": [3, 7],
+        "words_per_sentence_range": [1, 4],
+        "extend_chance": 0.7,
+        "upper_chance_per_word": 0.08,
+        "stutter_chance": 0.2,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+      "existential": {
+        "sounds": ["mew", "hmm", "mrr", "meow"],
+        "punctuation": ["...", "?", "...?", "—"],
+        "upper_chance_per_letter": 0.1,
+        "extend_range": [2, 6],
+        "words_per_sentence_range": [1, 5],
+        "extend_chance": 0.55,
+        "upper_chance_per_word": 0.12,
+        "stutter_chance": 0.12,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+      "overthinking": {
+        "sounds": ["mew", "hmm", "mrrp", "uh"],
+        "punctuation": ["??", "...?", "???", "..."],
+        "upper_chance_per_letter": 0.2,
+        "extend_range": [2, 5],
+        "words_per_sentence_range": [2, 6],
+        "extend_chance": 0.55,
+        "upper_chance_per_word": 0.22,
+        "stutter_chance": 0.35,
+        "chance_to_change_mood": 0.25,
+        "other_moods": {
+            "spiraling": 0.3,
+            "paranoid": 0.2,
+            "existential": 0.2,
+            "confused": 0.15,
+            "sleepy": 0.15
+        }
+    },
+      "awkward": {
+        "sounds": ["uh", "mew", "mm", "mrr"],
+        "punctuation": ["...", ".", "...?", ""],
+        "upper_chance_per_letter": 0.12,
+        "extend_range": [2, 4],
+        "words_per_sentence_range": [1, 3],
+        "extend_chance": 0.4,
+        "upper_chance_per_word": 0.15,
+        "stutter_chance": 0.4,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+      "socially_exhausted": {
+        "sounds": ["mew", "mm", "prr", "ugh"],
+        "punctuation": ["...", ".", "", "..."],
+        "upper_chance_per_letter": 0.05,
+        "extend_range": [2, 5],
+        "words_per_sentence_range": [1, 3],
+        "extend_chance": 0.6,
+        "upper_chance_per_word": 0.08,
+        "stutter_chance": 0.1,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+      "attention_seeking": {
+        "sounds": ["meow", "mrrp", "nya", "hey"],
+        "punctuation": ["!!!", "!!", "???", ""],
+        "upper_chance_per_letter": 0.35,
+        "extend_range": [2, 6],
+        "words_per_sentence_range": [3, 7],
+        "extend_chance": 0.75,
+        "upper_chance_per_word": 0.45,
+        "stutter_chance": 0.3,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+      "validation_hungry": {
+        "sounds": ["mew", "meow", "mrrp", "uh"],
+        "punctuation": ["??", "???", "...", ""],
+        "upper_chance_per_letter": 0.22,
+        "extend_range": [3, 7],
+        "words_per_sentence_range": [3, 6],
+        "extend_chance": 0.8,
+        "upper_chance_per_word": 0.25,
+        "stutter_chance": 0.4,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+      "jealousy_spike": {
+        "sounds": ["hiss", "mrr", "grr", "meow"],
+        "punctuation": ["!!", "???", "!?!?", ""],
+        "upper_chance_per_letter": 0.45,
+        "extend_range": [2, 6],
+        "words_per_sentence_range": [2, 5],
+        "extend_chance": 0.7,
+        "upper_chance_per_word": 0.4,
+        "stutter_chance": 0.25,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+      "dramatic_pause": {
+        "sounds": ["mew", "mrr", "hmm", "meow"],
+        "punctuation": ["...", "...", "—", ""],
+        "upper_chance_per_letter": 0.08,
+        "extend_range": [2, 5],
+        "words_per_sentence_range": [1, 3],
+        "extend_chance": 0.7,
+        "upper_chance_per_word": 0.1,
+        "stutter_chance": 0.1,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+      "fake_confident": {
+        "sounds": ["meow", "mrrp", "yeah", "mew"],
+        "punctuation": ["!", "!!", "...!", ""],
+        "upper_chance_per_letter": 0.35,
+        "extend_range": [2, 5],
+        "words_per_sentence_range": [3, 6],
+        "extend_chance": 0.6,
+        "upper_chance_per_word": 0.4,
+        "stutter_chance": 0.2,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+      "panicking": {
+        "sounds": ["mew", "mrrp", "ah", "meow"],
+        "punctuation": ["!!!", "???", "!?!?", ""],
+        "upper_chance_per_letter": 0.6,
+        "extend_range": [2, 7],
+        "words_per_sentence_range": [3, 7],
+        "extend_chance": 0.85,
+        "upper_chance_per_word": 0.65,
+        "stutter_chance": 0.5,
+        "chance_to_change_mood": 0.3,
+        "other_moods": {
+            "overstimulated": 0.25,
+            "spiraling": 0.25,
+            "paranoid": 0.2,
+            "soft_crying": 0.15,
+            "sleepy": 0.15
+        }
+    },
+      "soft_crying": {
+        "sounds": ["mew", "mm", "prr", "meow"],
+        "punctuation": ["...", "...", "", "."],
+        "upper_chance_per_letter": 0.05,
+        "extend_range": [3, 7],
+        "words_per_sentence_range": [1, 3],
+        "extend_chance": 0.8,
+        "upper_chance_per_word": 0.05,
+        "stutter_chance": 0.2,
+        "chance_to_change_mood": 0.22,
+        "other_moods": {
+            "melancholy": 0.25,
+            "lonely": 0.25,
+            "sleepy": 0.2,
+            "affectionate": 0.15,
+            "happy": 0.15
+        }
+    },
+      "ugly_crying": {
+        "sounds": ["MEOw", "mrrr", "mew", "wah"],
+        "punctuation": ["!!!", "???", "!?!?", ""],
+        "upper_chance_per_letter": 0.7,
+        "extend_range": [3, 9],
+        "words_per_sentence_range": [3, 7],
+        "extend_chance": 0.9,
+        "upper_chance_per_word": 0.75,
+        "stutter_chance": 0.6,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+      "giggly": {
+        "sounds": ["mew", "hehe", "mrrp", "nya"],
+        "punctuation": ["!", "!!", "~", ""],
+        "upper_chance_per_letter": 0.3,
+        "extend_range": [2, 5],
+        "words_per_sentence_range": [3, 6],
+        "extend_chance": 0.7,
+        "upper_chance_per_word": 0.35,
+        "stutter_chance": 0.25,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+      "unhinged": {
+        "sounds": ["meow", "mrrp", "hiss", "nya"],
+        "punctuation": ["!!!", "???", "!?!?", "—"],
+        "upper_chance_per_letter": 0.75,
+        "extend_range": [2, 8],
+        "words_per_sentence_range": [4, 9],
+        "extend_chance": 0.9,
+        "upper_chance_per_word": 0.8,
+        "stutter_chance": 0.4,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+      "manic": {
+        "sounds": ["meow", "mrrp", "nya", "mew"],
+        "punctuation": ["!!!", "!!", "!?!?", ""],
+        "upper_chance_per_letter": 0.65,
+        "extend_range": [2, 8],
+        "words_per_sentence_range": [4, 9],
+        "extend_chance": 0.85,
+        "upper_chance_per_word": 0.7,
+        "stutter_chance": 0.3,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+      "spiraling": {
+        "sounds": ["mew", "mrr", "hmm", "meow"],
+        "punctuation": ["...", "???", "...?", ""],
+        "upper_chance_per_letter": 0.2,
+        "extend_range": [2, 6],
+        "words_per_sentence_range": [2, 6],
+        "extend_chance": 0.75,
+        "upper_chance_per_word": 0.25,
+        "stutter_chance": 0.45,
+        "chance_to_change_mood": 0.28,
+        "other_moods": {
+            "overthinking": 0.25,
+            "panicking": 0.25,
+            "paranoid": 0.2,
+            "delusional": 0.15,
+            "soft_crying": 0.15
+        }
+    },
+      "gaslighty": {
+        "sounds": ["mrr", "hmph", "meow", "hmm"],
+        "punctuation": [".", "...", "—", ""],
+        "upper_chance_per_letter": 0.15,
+        "extend_range": [2, 4],
+        "words_per_sentence_range": [1, 4],
+        "extend_chance": 0.4,
+        "upper_chance_per_word": 0.2,
+        "stutter_chance": 0.1,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+      "overreacting": {
+        "sounds": ["meow", "mrrp", "ah", "nya"],
+        "punctuation": ["!!!", "??", "!?!?", ""],
+        "upper_chance_per_letter": 0.5,
+        "extend_range": [2, 7],
+        "words_per_sentence_range": [3, 7],
+        "extend_chance": 0.8,
+        "upper_chance_per_word": 0.55,
+        "stutter_chance": 0.35,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+      "clingy_texting": {
+        "sounds": ["meow", "mew", "nya", "mrrp"],
+        "punctuation": ["...", "???", "!!", ""],
+        "upper_chance_per_letter": 0.25,
+        "extend_range": [3, 8],
+        "words_per_sentence_range": [4, 9],
+        "extend_chance": 0.9,
+        "upper_chance_per_word": 0.3,
+        "stutter_chance": 0.5,
+        "chance_to_change_mood": 0.16,
+        "other_moods": {
+            "happy": 0.35,
+            "sleepy": 0.25,
+            "confused": 0.2,
+            "playful": 0.2
+        }
+    },
+      "double_texting": {
+        "sounds": ["meow", "mrrp", "uh", "mew"],
+        "punctuation": ["??", "???", "...", ""],
+        "upper_chance_per_letter": 0.22,
+        "extend_range": [3, 7],
+        "words_per_sentence_range": [3, 8],
+        "extend_chance": 0.85,
+        "upper_chance_per_word": 0.25,
+        "stutter_chance": 0.45,
+        "chance_to_change_mood": 0.28,
+        "other_moods": {
+            "triple_texting": 0.3,
+            "clingy_texting": 0.25,
+            "overthinking": 0.2,
+            "ghosting": 0.15,
+            "happy": 0.1
+        }
+    },
+      "triple_texting": {
+        "sounds": ["meow", "mrrp", "uh", "nya"],
+        "punctuation": ["???", "????", "...", ""],
+        "upper_chance_per_letter": 0.25,
+        "extend_range": [4, 9],
+        "words_per_sentence_range": [4, 10],
+        "extend_chance": 0.9,
+        "upper_chance_per_word": 0.3,
+        "stutter_chance": 0.55,
+        "chance_to_change_mood": 0.3,
+        "other_moods": {
+            "panicking": 0.25,
+            "overattached": 0.25,
+            "soft_crying": 0.2,
+            "ghosting": 0.2,
+            "sleepy": 0.1
+        }
+    },
+      "ghosting": {
+        "sounds": ["mew", "mm", "mrr", ""],
+        "punctuation": ["...", "", ""],
+        "upper_chance_per_letter": 0.02,
+        "extend_range": [1, 3],
+        "words_per_sentence_range": [0, 2],
+        "extend_chance": 0.2,
+        "upper_chance_per_word": 0.02,
+        "stutter_chance": 0.0,
+        "chance_to_change_mood": 0.12,
+        "other_moods": {
+            "lonely": 0.3,
+            "awkward": 0.25,
+            "sleepy": 0.2,
+            "soft_crying": 0.15,
+            "happy": 0.1
+        }
+    }
+}
 
-def save_moods():
-    # convert tuples to lists automatically through JSON
-    with open(MOODS_FILE, "w", encoding="utf-8") as f:
-        json.dump(moods, f, indent=4, ensure_ascii=False)
-
-
-def load_moods():
-    global moods
-
-    if not MOODS_FILE.exists():
-        return
-
-    with open(MOODS_FILE, "r", encoding="utf-8") as f:
-        loaded = json.load(f)
-
-    # convert JSON lists back into tuples where needed
-    for mood_name, config in loaded.items():
-        config["extend_range"] = tuple(config["extend_range"])
-        config["words_per_sentence_range"] = tuple(config["words_per_sentence_range"])
-
-    moods.update(loaded)
-
-moods = {}
-load_moods()
-
-def get_similar_moods():
-    query = search.get().lower().strip()
-
-    reload(list(moods.keys()))
-
-    names = list(moods.keys())
-
-    # get close matches
-    matches = difflib.get_close_matches(query, names, n=50, cutoff=0.3)
-
-    # also include substring matches (so short queries still work)
-    substring = [m for m in names if query in m.lower()]
-
-    # combine + remove duplicates
-    reload(list(dict.fromkeys(substring + matches)))
 
 def set_mood(mood_to_set):
     global mood
     if mood_to_set == mood:
         return
     mood = mood_to_set
-    print(f"Setting mood to {mood}")
-    button = ctk.CTkButton(
-        frame2,
-        text=mood_to_set,
-        command=lambda j=mood_to_set: set_mood(j)
-    )
-    button.pack()
-
-def reload(keys):
-    for widget in frame.winfo_children():
-        widget.destroy()
-
-    cols = 3
-    for idx, mood_name in enumerate(keys):
-        row = idx // cols
-        col = idx % cols
-
-        button = ctk.CTkButton(
-            frame,
-            text=mood_name,
-            command=lambda j=mood_name: set_mood(j)
-        )
-        button.grid(row=row, column=col, padx=5, pady=5)
-
-root = ctk.CTk()
-
-root.geometry("500x400")
-
-search = ctk.CTkEntry(root, placeholder_text="Search")
-search.bind("<KeyRelease>", lambda e: get_similar_moods())
-search.pack()
-
-# ai_gen = ctk.CTkEntry(root, placeholder_text="Search")
-# ai_gen.pack()
-# ai_gen_button = ctk.CTkButton(root, text="Generate", command=lambda j=ai_gen.get(): generate_ai_mood(j))
-# ai_gen_button.pack()
-
-frame = ctk.CTkScrollableFrame(root)
-frame.pack(fill="both", expand=True)
-
-root2 = ctk.CTkToplevel(root)
-root2.geometry("200x400")
-frame2 = ctk.CTkScrollableFrame(root2)
-frame2.pack(fill="both", expand=True)
 
 mood = ""
 set_mood("happy")
-
-reload(moods.keys())
 
 def random_cat_sound():
     parts = []
@@ -137,21 +2082,25 @@ def random_cat_sound():
 
     return " ".join(parts) + random.choice(punctuation)
 
-def different_mood():
-    while 1:
-        other_moods = moods[mood]["other_moods"]
-        chance_to_change_mood = moods[mood]["chance_to_change_mood"]
-        if random.random() < chance_to_change_mood:
-            set_mood(random.choices(
-                list(other_moods.keys()),
-                weights=list(other_moods.values()),
-                k=1
-            )[0])
-        time.sleep(1)
+@tasks.loop(seconds=1)
+async def different_mood():
+    global mood
+
+    other_moods = moods[mood]["other_moods"]
+    chance_to_change_mood = moods[mood]["chance_to_change_mood"]
+
+    if other_moods and random.random() < chance_to_change_mood:
+        set_mood(random.choices(
+            list(other_moods.keys()),
+            weights=list(other_moods.values()),
+            k=1
+        )[0])
 
 class Client(commands.Bot):
     async def on_ready(self):
         print(f"Logged on as {self.user}!")
+        if not different_mood.is_running():
+            different_mood.start()
 
     async def on_message(self, message):
         if message.author == self.user:
@@ -173,12 +2122,8 @@ client = Client(command_prefix="!", intents=intents)
 
 GUILD_ID = discord.Object(id=1500274236386836590)
 
-print(moods.keys())
-
-threadchangemood = threading.Thread(target=different_mood)
-threadchangemood.start()
 load_dotenv()
-thread = threading.Thread(target=client.run, args=(os.getenv("BOT_TOKEN"),))
-thread.start()
-root.mainloop()
+
+if __name__ == "__main__":
+    client.run(os.getenv("BOT_TOKEN"))
 
